@@ -1,0 +1,34 @@
+<idea-plugin>
+
+    <!-- Уникальный идентификатор плагина. Он должен быть FQN. Он не может быть изменен между версиями плагина. -->
+    <id>com.dim.gen</id>
+
+    <!-- Название плагина -->
+    <name>DimGen</name>
+
+    <!-- Информация о производителе -->
+    <vendor email="joke@yourcompany.com" url="https://www.yourcompany.com">JokeCompany</vendor>
+
+    <!-- Описание плагина -->
+    <description>
+        <![CDATA[ Generate dimens.xml for easy and chill mood  ]]>
+    </description>
+
+    <!-- Зависимости плагина -->
+    <depends>com.intellij.modules.platform</depends>
+
+    <!-- Определение действий и их группировка -->
+    <actions>
+
+        <!-- Определение действия для генерации dimens -->
+        <action id="GenerateDimens"
+                class="com.dim.gen.GenerateDimensAction"
+                text="Generate Dimens"
+                description="Generate Dimens for XML">
+
+            <!-- Добавление действия в контекстное меню редактора -->
+            <add-to-group group-id="EditorPopupMenu" anchor="last" />
+        </action>
+
+    </actions>
+</idea-plugin>
