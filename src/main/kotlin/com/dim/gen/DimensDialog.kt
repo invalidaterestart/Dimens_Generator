@@ -17,11 +17,11 @@ import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Document
 import org.w3c.dom.NodeList
+import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
 import java.awt.event.ActionEvent
-import java.io.File
-import java.io.FileOutputStream
-import java.io.OutputStreamWriter
-import java.io.PrintWriter
+import java.io.*
+import javax.xml.stream.XMLOutputFactory
 import javax.xml.transform.OutputKeys
 import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
@@ -44,7 +44,8 @@ class DimensDialog(private val project: Project, private val actionEvent: AnActi
         "paddingTop" to "padding_top",
         "paddingBottom" to "padding_bottom",
         "paddingVertical" to "padding_vertical",
-        "paddingHorizontal" to "padding_horizontal"
+        "paddingHorizontal" to "padding_horizontal",
+        "padding" to "padding"
     )
 
     private val mainPanel = JPanel(BorderLayout())
@@ -147,45 +148,55 @@ class DimensDialog(private val project: Project, private val actionEvent: AnActi
 
     fun appendDimenToFile(path: String, dimenName: String, dimenValue: Int) {
         log("Appending/updating dimen in file: $path, $dimenName = ${dimenValue}dp")
-        val documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-        val document = documentBuilder.parse(path)
 
-        val root = document.documentElement
+        try {
+            val documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            val document = documentBuilder.parse(path)
 
-        var existingDimen: Element? = null
-        val dimens = root.getElementsByTagName("dimen")
-        for (i in 0 until dimens.length) {
-            val element = dimens.item(i) as Element
-            if (element.getAttribute("name") == dimenName) {
-                existingDimen = element
-                break
+            val root = document.documentElement
+
+            var existingDimen: Element? = null
+            val dimens = root.getElementsByTagName("dimen")
+            for (i in 0 until dimens.length) {
+                val element = dimens.item(i) as Element
+                if (element.getAttribute("name") == dimenName) {
+                    existingDimen = element
+                    break
+                }
             }
+
+            if (existingDimen != null) {
+                log("Existing dimen found: $dimenName. Updating...")
+                existingDimen.textContent = "${dimenValue}dp"
+            } else {
+                log("Creating new dimen: $dimenName")
+                val newDimen = document.createElement("dimen")
+                newDimen.setAttribute("name", dimenName)
+                newDimen.appendChild(document.createTextNode("${dimenValue}dp"))
+
+                val newLine = document.createTextNode("\n")
+
+                // Добавляем новый элемент перед закрывающим тегом </resources>
+                root.appendChild(newLine)
+                root.appendChild(newDimen)
+            }
+
+            val transformer = TransformerFactory.newInstance().newTransformer()
+
+            // Отключаем автоматическое форматирование, чтобы сохранить исходное форматирование
+            transformer.setOutputProperty(OutputKeys.INDENT, "no")
+
+            val writer = PrintWriter(FileOutputStream(path))
+            val result = StreamResult(writer)
+            transformer.transform(DOMSource(document), result)
+        } catch (e: Exception) {
+            log("Error appending/updating dimen: ${e.message}")
+            e.printStackTrace()
         }
-
-        if (existingDimen != null) {
-            log("Existing dimen found: $dimenName. Updating...")
-            existingDimen.textContent = "${dimenValue}dp"
-        } else {
-            log("Creating new dimen: $dimenName")
-            val newDimen = document.createElement("dimen")
-            newDimen.setAttribute("name", dimenName)
-            newDimen.appendChild(document.createTextNode("${dimenValue}dp"))
-
-            val newLine = document.createTextNode("\n")
-
-            // Добавляем новый элемент перед закрывающим тегом </resources>
-            root.appendChild(newLine)
-            root.appendChild(newDimen)
-        }
-        val transformer = TransformerFactory.newInstance().newTransformer()
-
-        // Отключаем автоматическое форматирование, чтобы сохранить исходное форматирование
-        transformer.setOutputProperty(OutputKeys.INDENT, "no")
-
-        val writer = PrintWriter(FileOutputStream(path))
-        val result = StreamResult(writer)
-        transformer.transform(DOMSource(document), result)
     }
+
+
+
 
 
 
@@ -195,28 +206,19 @@ class DimensDialog(private val project: Project, private val actionEvent: AnActi
         log("Start processing file: ${selectedFile.absolutePath}")
 
         try {
-            // Вычисляем директорию 'res' на основе выбранного файла
             val resDir = selectedFile.parentFile.parentFile
             log("Determined 'res' directory: ${resDir.absolutePath}")
 
-            // Извлекаем имя макета из пути к файлу (без расширения)
             val layoutName = selectedFile.nameWithoutExtension
             log("Extracted layout name: $layoutName")
 
             val docBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
             val doc = docBuilder.parse(selectedFile)
 
-            val allElements = doc.getElementsByTagName("*").toElementSequence()
-            for (element in allElements) {
-                log("Found element: ${element.nodeName}")
-            }
-
             val nodesWithId = doc.getElementsByTagName("*").toElementSequence()
                 .filter { it.hasAttribute("android:id") }
-            val nodeListSize = nodesWithId.toList().size
 
-
-            log("Found $nodeListSize elements with 'android:id' attribute")
+            log("Found ${nodesWithId.toList().size} elements with 'android:id' attribute")
 
             for (element in nodesWithId) {
                 log("Processing element with id: ${element.getAttribute("android:id")}")
@@ -228,11 +230,12 @@ class DimensDialog(private val project: Project, private val actionEvent: AnActi
                         val baseSize = value.replace("dp", "").toInt()
                         val dimenName = "${layoutName}_${elementId}_${translated}"
 
+                        element.setAttribute("android:$attribute", "@dimen/$dimenName")
+
                         val baseDimensPath = File(resDir, "values/dimens.xml")
                         log("Appending dimen to base dimens file: $dimenName = ${baseSize}dp")
                         appendDimenToFile(baseDimensPath.absolutePath, dimenName, baseSize)
 
-                        // Проходим по всем файлам dimens и добавляем или обновляем значение на основе множителей
                         for (sw in widthMultipliers.keys) {
                             if (isDimensionEnabled(sw)) {
                                 val folderName = "values-$sw"
@@ -250,12 +253,25 @@ class DimensDialog(private val project: Project, private val actionEvent: AnActi
                     }
                 }
             }
+
+            val transformer = TransformerFactory.newInstance().newTransformer()
+            transformer.setOutputProperty(OutputKeys.INDENT, "no")
+            val writer = PrintWriter(FileOutputStream(selectedFile))
+            val result = StreamResult(writer)
+            transformer.transform(DOMSource(doc), result)
+
             log("Processing completed successfully.")
         } catch (e: Exception) {
             log("Error processing file: ${e.message}")
             e.printStackTrace()
         }
     }
+
+
+
+
+
+
 
     fun NodeList.toElementSequence(): Sequence<Element> {
         return sequence {
