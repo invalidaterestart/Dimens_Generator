@@ -3,7 +3,6 @@ package com.dim.gen
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.components.JBCheckBox
@@ -15,13 +14,9 @@ import javax.swing.*
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
-import org.w3c.dom.Document
 import org.w3c.dom.NodeList
-import org.xmlpull.v1.XmlPullParser
-import org.xmlpull.v1.XmlPullParserFactory
 import java.awt.event.ActionEvent
 import java.io.*
-import javax.xml.stream.XMLOutputFactory
 import javax.xml.transform.OutputKeys
 import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
@@ -39,14 +34,25 @@ class DimensDialog(private val project: Project, private val actionEvent: AnActi
         "layout_marginTop" to "layout_margin_top",
         "layout_marginEnd" to "layout_margin_end",
         "layout_marginBottom" to "layout_margin_bottom",
+        "layout_marginLeft" to "layout_margin_left",
+        "layout_marginRight" to "layout_margin_right",
+        "layout_marginHorizontal" to "layout_margin_horizontal",
+        "layout_marginVertical" to "layout_margin_vertical",
         "paddingStart" to "padding_start",
         "paddingEnd" to "padding_end",
         "paddingTop" to "padding_top",
         "paddingBottom" to "padding_bottom",
+        "paddingLeft" to "padding_left",
+        "paddingRight" to "padding_right",
         "paddingVertical" to "padding_vertical",
         "paddingHorizontal" to "padding_horizontal",
-        "padding" to "padding"
+        "padding" to "padding",
+        "elevation" to "elevation",
+        "translationX" to "translation_x",
+        "translationY" to "translation_y",
+        "translationZ" to "translation_z"
     )
+
 
     private val mainPanel = JPanel(BorderLayout())
     private val optionsPanel = JPanel(GridLayout(0, 2))
@@ -195,15 +201,20 @@ class DimensDialog(private val project: Project, private val actionEvent: AnActi
         }
     }
 
-
-
-
-
-
-
     fun processXmlFile(selectedFile: File) {
         log("processXmlFile called!")
         log("Start processing file: ${selectedFile.absolutePath}")
+
+        if (isBackupEnabled()) {
+            val backupPath = "${selectedFile.parent}/${selectedFile.nameWithoutExtension}_backup.xml"
+            try {
+                selectedFile.copyTo(File(backupPath), overwrite = true)
+                log("Backup created at: $backupPath")
+            } catch (e: Exception) {
+                log("Failed to create backup: ${e.message}")
+                e.printStackTrace()
+            }
+        }
 
         try {
             val resDir = selectedFile.parentFile.parentFile
@@ -266,12 +277,6 @@ class DimensDialog(private val project: Project, private val actionEvent: AnActi
             e.printStackTrace()
         }
     }
-
-
-
-
-
-
 
     fun NodeList.toElementSequence(): Sequence<Element> {
         return sequence {
